@@ -17,7 +17,7 @@ public:
     ~MainWindow();
 
 private:
-    QTableWidget *instList, *regList, *memList, *rsList;
+    QTableWidget *instList, *regList, *memList, *rsList, *lsList;
     QLineEdit *instEdit;
     QSpinBox *numSpin;
     QLCDNumber *cycleNumber;
@@ -32,12 +32,33 @@ private slots:
     void updateMemory();
     void updateRegister();
     void updateRStation();
+    void updateLSQueue();
     void nextInst();
     void continueInst();
     void multiInst();
     void showAll();
     void showNZ();
     void changeMemory(int r, int c);
+    void modifyMemory();
 };
+
+
+class MySpinBox: public QSpinBox
+{
+    Q_OBJECT
+
+public:
+    MySpinBox( QWidget * parent = 0) :
+        QSpinBox(parent)
+    {
+    }
+
+    virtual QString textFromValue ( int value ) const
+    {
+        /* 4 - number of digits, 10 - base of number, '0' - pad character*/
+        return QString("%1").arg(value, 4 , 10, QChar('0'));
+    }
+};
+
 
 #endif // MAINWINDOW_H

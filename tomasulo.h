@@ -9,7 +9,7 @@
 #include <cstdlib>
 #include <cstdio>
 
-//using namespace std;
+using namespace std;
 
 #define LOAD 	(10)
 #define STORE 	(11)
@@ -28,9 +28,13 @@ public:
 
     int getOP(std::string str)
 	{
-		#define RETURN(XXX) if (str == #XXX) return XXX;
-		RETURN(LOAD) RETURN(STORE)
-		RETURN(ADD) RETURN(SUB) RETURN(MUL) RETURN(DIV)  
+		#define RETURN(XXX, YYY) if (str == #XXX) return YYY;
+		RETURN(ADDD, ADD)
+		RETURN(SUBD, SUB)
+		RETURN(MULD, MUL)
+		RETURN(DIVD, DIV)
+		RETURN(LD, LOAD)
+		RETURN(ST, STORE)
 		#undef RETURN
         throw 0;
 		return 0;
@@ -45,15 +49,15 @@ public:
         OP = getOP((std::string)opr);
 		if (OP == LOAD)
 		{
-			sscanf(buf + strlen(opr) + 1, "R%d %d", &Rd, &addr); // LOAD Rd addr
+			sscanf(buf + strlen(opr) + 1, "F%d %d", &Rd, &addr); // LOAD Rd addr
 		}
 		else if (OP == STORE)
 		{
-			sscanf(buf + strlen(opr) + 1, "R%d %d", &Rd, &addr); // STORE Rd addr
+			sscanf(buf + strlen(opr) + 1, "F%d %d", &Rd, &addr); // STORE Rd addr
 		}
 		else if (OP == ADD || OP == SUB || OP == MUL || OP == DIV)
 		{
-			sscanf(buf + strlen(opr) + 1, "R%d R%d R%d", &Rd, &Rs, &Rt); // OP Rd Rs Rt
+			sscanf(buf + strlen(opr) + 1, "F%d F%d F%d", &Rd, &Rs, &Rt); // OP Rd Rs Rt
 		}
 		else assert(0);
 		init();
@@ -76,7 +80,7 @@ public:
 	int instruction_number;
 	int OP;
 	double Vj, Vk, result;
-	ReservationStation *Qj, *Qk;
+	ReservationStation *Qi, *Qj, *Qk;
 	int addr;
 	bool busy, ready;
 	int remain_time;
@@ -203,6 +207,7 @@ public:
 	void issue_instruction(ReservationStation *free_station)
 	{
 		Instruction &__ins = instruction[pc];
+		__ins.shoot_time = clock;
 		int OP = __ins.OP;
 
 		free_station->busy = true;
@@ -239,7 +244,9 @@ public:
 			free_station->Qj = reg[Rd].Qi;
 			free_station->Qk = NULL;
 			free_station->addr= addr;
-			if (reg[Rd].Qi == NULL) free_station->Vj = reg[Rd].value;
+			if (reg[Rd].Qi == NULL) free_station->Vj = reg[Rd].value, free_station->Qi = NULL;
+			else free_station->Qi = reg[Rd].Qi;
+
 		}
 	}
 
@@ -335,16 +342,16 @@ public:
 //	// Testcase 1:
 //	tomasulo.set_memory(1000, 1);
 //	tomasulo.set_memory(1001, 1);
-//	tomasulo.addInstruction(Instruction("LOAD R1 1000")); // R1 = m[1000] = 1
-//	tomasulo.addInstruction(Instruction("LOAD R2 1001")); // R2 = m[1001] = 1
+//	tomasulo.addInstruction(Instruction("LD F1 1000")); // R1 = m[1000] = 1
+//	tomasulo.addInstruction(Instruction("LD F2 1001")); // R2 = m[1001] = 1
 	
 //	for (int i = 0; i < 7; i++)
 //	{
-//		tomasulo.addInstruction(Instruction("ADD R1 R1 R2")); // R1 = R1 + R2
-//		tomasulo.addInstruction(Instruction("STORE R1 777")); // swap(R1, R2)
-//		tomasulo.addInstruction(Instruction("STORE R2 888"));
-//		tomasulo.addInstruction(Instruction("LOAD R1 888"));
-//		tomasulo.addInstruction(Instruction("LOAD R2 777"));
+//		tomasulo.addInstruction(Instruction("ADDD F1 F1 F2")); // R1 = R1 + R2
+//		tomasulo.addInstruction(Instruction("ST F1 777")); // swap(R1, R2)
+//		tomasulo.addInstruction(Instruction("ST F2 888"));
+//		tomasulo.addInstruction(Instruction("LD F1 888"));
+//		tomasulo.addInstruction(Instruction("LD F2 777"));
 //	}
 
 //	// Testcase 2:

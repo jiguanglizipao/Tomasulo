@@ -1,5 +1,4 @@
 #include "mainwindow.h"
-#include "ui_mainwindow.h"
 
 #include <QBoxLayout>
 #include <QPushButton>
@@ -8,9 +7,11 @@
 #include <QFileDialog>
 #include <QScrollBar>
 #include <QHeaderView>
+#include <QFormLayout>
+#include <QDialogButtonBox>
 #include <cmath>
 
-Tomasulo global_tomasulo;
+Tomasulo global_tomasulo[1024];
 
 MainWindow::MainWindow(QWidget *parent) :
     QWidget(parent)
@@ -90,29 +91,49 @@ MainWindow::MainWindow(QWidget *parent) :
     vbox->addWidget(this->memList);
     QPushButton *showallButton = new QPushButton("显示所有", this);
     QPushButton *shownzButton = new QPushButton("显示非零", this);
-    showall = true;
+    QPushButton *modifyButton = new QPushButton("修改内存", this);
+    showall = false;
     hboxt = new QHBoxLayout;
     hboxt->addWidget(showallButton);
     hboxt->addWidget(shownzButton);
+    hboxt->addWidget(modifyButton);
     vbox->addLayout(hboxt);
     hbox->addLayout(vbox);
 
     layout->addLayout(hbox);
-    layout->setStretchFactor(hbox, 60);
+    layout->setStretchFactor(hbox, 55);
 
-    layout->addWidget(new QLabel("保留站状态："));
+    hbox = new QHBoxLayout;
+    vbox = new QVBoxLayout;
+    vbox->addWidget(new QLabel("保留站状态："));
     this->rsList = new QTableWidget(this);
     header.clear();
     header<<"剩余周期数"<<"名称"<<"繁忙"<<"操作"<<"Vj"<<"Vk"<<"Qj"<<"Qk";
     this->rsList->setColumnCount(8);
-    this->rsList->setRowCount(11);
+    this->rsList->setRowCount(5);
     this->rsList->setHorizontalHeaderLabels(header);
     this->rsList->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
     this->rsList->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    layout->addWidget(this->rsList);
+    vbox->addWidget(this->rsList);
+    hbox->addLayout(vbox);
+
+    vbox = new QVBoxLayout;
+    vbox->addWidget(new QLabel("Load/Store队列："));
+    this->lsList = new QTableWidget(this);
+    header.clear();
+    header<<"剩余周期数"<<"名称"<<"繁忙"<<"操作"<<"地址"<<"Qi";
+    this->lsList->setColumnCount(6);
+    this->lsList->setRowCount(6);
+    this->lsList->setHorizontalHeaderLabels(header);
+    this->lsList->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    this->lsList->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    vbox->addWidget(this->lsList);
+    hbox->addLayout(vbox);
+
+    layout->addLayout(hbox);
     this->setLayout(layout);
 
-    this->tomasulo = &global_tomasulo;
+    this->tomasulo = global_tomasulo;
 
     connect(addButton, SIGNAL(clicked(bool)), this, SLOT(addInst()));
     connect(loadButton, SIGNAL(clicked(bool)), this, SLOT(loadInst()));
@@ -121,11 +142,13 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(multiButton, SIGNAL(clicked(bool)), this, SLOT(multiInst()));
     connect(showallButton, SIGNAL(clicked(bool)), this, SLOT(showAll()));
     connect(shownzButton, SIGNAL(clicked(bool)), this, SLOT(showNZ()));
+    connect(modifyButton, SIGNAL(clicked(bool)), this, SLOT(modifyMemory()));
     connect(this->memList, SIGNAL(cellChanged(int,int)), this, SLOT(changeMemory(int,int)));
 
     this->updateMemory();
     this->updateRegister();
     this->updateRStation();
+    this->updateLSQueue();
 }
 
 void MainWindow::showAll()
@@ -166,7 +189,7 @@ void MainWindow::updateRegister()
     for(size_t i=0; i<MAX_REG;i++)
     {
         double value = this->tomasulo->get_register(i);
-        QString str = "R"+QString::number(i);
+        QString str = "F"+QString::number(i);
         this->regList->setItem(i, 0, new QTableWidgetItem(str));
         if(value > 1e99)
             this->regList->setItem(i, 1, new QTableWidgetItem(QString("Waiting...")));
@@ -177,20 +200,39 @@ void MainWindow::updateRegister()
 
 void MainWindow::updateRStation()
 {
-    const size_t MAX_RS = 11;
+    const size_t MAX_RS = 5;
     for(size_t i=0; i<MAX_RS;i++)
     {
         const ReservationStation &s = this->tomasulo->station[i];
         QString a[] = {"×", "√"};
         const char *name[] = {"ADD1", "ADD2", "ADD3", "MUL/DIV1", "MUL/DIV2", "LOAD1", "LOAD2", "LOAD3", "STORE1", "STORE2", "STORE3"};
+        const char *op[] = {"-", "", "", "", "", "", "", "", "", "", "LD", "ST", "ADDD", "SUBD", "MULD", "DIVD"};
         this->rsList->setItem(i, 0, new QTableWidgetItem(QString::number(s.remain_time)));
         this->rsList->setItem(i, 1, new QTableWidgetItem(QString::fromStdString(name[i])));
         this->rsList->setItem(i, 2, new QTableWidgetItem(a[s.busy]));
-        this->rsList->setItem(i, 3, new QTableWidgetItem(QString::number(s.OP)));
+        this->rsList->setItem(i, 3, new QTableWidgetItem(op[s.OP]));
         this->rsList->setItem(i, 4, new QTableWidgetItem(QString::number(s.Vj)));
         this->rsList->setItem(i, 5, new QTableWidgetItem(QString::number(s.Vk)));
-        this->rsList->setItem(i, 6, new QTableWidgetItem(QString::number(s.Qj?s.Qj-this->tomasulo->station:-1)));
-        this->rsList->setItem(i, 7, new QTableWidgetItem(QString::number(s.Qk?s.Qk-this->tomasulo->station:-1)));
+        this->rsList->setItem(i, 6, new QTableWidgetItem(s.Qj?name[s.Qj-this->tomasulo->station]:"-"));
+        this->rsList->setItem(i, 7, new QTableWidgetItem(s.Qk?name[s.Qk-this->tomasulo->station]:"-"));
+    }
+}
+
+void MainWindow::updateLSQueue()
+{
+    const size_t MAX_RS = 11, START_RS = 5;
+    for(size_t i=START_RS; i<MAX_RS;i++)
+    {
+        const ReservationStation &s = this->tomasulo->station[i];
+        QString a[] = {"×", "√"};
+        const char *name[] = {"ADD1", "ADD2", "ADD3", "MUL/DIV1", "MUL/DIV2", "LOAD1", "LOAD2", "LOAD3", "STORE1", "STORE2", "STORE3"};
+        const char *op[] = {"-", "", "", "", "", "", "", "", "", "", "LD", "ST", "ADDD", "SUBD", "MULD", "DIVD"};
+        this->lsList->setItem(i-START_RS, 0, new QTableWidgetItem(QString::number(s.remain_time)));
+        this->lsList->setItem(i-START_RS, 1, new QTableWidgetItem(QString::fromStdString(name[i])));
+        this->lsList->setItem(i-START_RS, 2, new QTableWidgetItem(a[s.busy]));
+        this->lsList->setItem(i-START_RS, 3, new QTableWidgetItem(op[s.OP]));
+        this->lsList->setItem(i-START_RS, 4, new QTableWidgetItem(QString::number(s.addr)));
+        this->lsList->setItem(i-START_RS, 5, new QTableWidgetItem(s.Qi?name[s.Qi-this->tomasulo->station]:"-"));
     }
 }
 
@@ -233,6 +275,7 @@ void MainWindow::nextInst()
     this->updateMemory();
     this->updateRegister();
     this->updateRStation();
+    this->updateLSQueue();
 }
 
 void MainWindow::continueInst()
@@ -272,14 +315,56 @@ void MainWindow::loadInst()
     if (fileName.isEmpty()) return;
     QFile fi(fileName);
     if (!fi.open(QIODevice::ReadOnly | QIODevice::Text)) return;
+    tomasulo++;
     while(!fi.atEnd())
     {
         QString line(fi.readLine());
         line = line.simplified();
+        if(line.isEmpty()) continue;
         this->addInst(&line);
     }
     fi.close();
-    updateInstList();
+    this->updateCycleNumber();
+    this->updateInstList();
+    this->updateMemory();
+    this->updateRegister();
+    this->updateRStation();
+    this->updateLSQueue();
+}
+
+void MainWindow::modifyMemory()
+{
+    QDialog dialog(this);
+    QFormLayout form(&dialog);
+
+    QString value1 = QString("地址: ");
+    QSpinBox *spinbox1 = new MySpinBox(&dialog);
+
+    spinbox1->setMinimum(0);
+    spinbox1->setMaximum(4095);
+    form.addRow(value1, spinbox1);
+
+    QString value2 = QString("值: ");
+    QDoubleSpinBox *spinbox2 = new QDoubleSpinBox(&dialog);
+    spinbox2->setMaximum(1e50);
+    spinbox2->setDecimals(10);
+    form.addRow(value2, spinbox2);
+
+    QDialogButtonBox buttonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
+        Qt::Horizontal, &dialog);
+    form.addRow(&buttonBox);
+
+    QObject::connect(&buttonBox, SIGNAL(accepted()), &dialog, SLOT(accept()));
+    QObject::connect(&buttonBox, SIGNAL(rejected()), &dialog, SLOT(reject()));
+
+    // Process when OK button is clicked
+    if (dialog.exec() == QDialog::Accepted) {
+        size_t index = spinbox1->value();
+        double value = spinbox2->value();
+        if(fabs(this->tomasulo->get_memory(index) - value) < 1e-9) return;
+        this->tomasulo->set_memory(index, value);
+        this->updateMemory();
+    }
 }
 
 MainWindow::~MainWindow()
